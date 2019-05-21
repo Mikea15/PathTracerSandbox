@@ -29,7 +29,7 @@ static const unsigned int SCREEN_HEIGHT = 600u;
 static const unsigned int PIXEL_COUNT = SCREEN_WIDTH * SCREEN_HEIGHT;
 
 Vec3 camPos(50, 45, 290.6);
-Raytracer tracer(SCREEN_WIDTH, SCREEN_HEIGHT, 2, 6, 8 * 1024, 32);
+Raytracer tracer(SCREEN_WIDTH, SCREEN_HEIGHT, 2, 6, 8 * 1024, 32, 10.0f);
 
 // main entry point
 int main(int argc, char* argv[])

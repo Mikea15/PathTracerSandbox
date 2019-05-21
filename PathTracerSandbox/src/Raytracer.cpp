@@ -6,7 +6,7 @@
 #include "Scene.h"
 #include "Sphere.h"
 
-Raytracer::Raytracer(int width, int height, int subSamples, int samplesPerPixel, int raysPerFrame, int aoSamples)
+Raytracer::Raytracer(int width, int height, int subSamples, int samplesPerPixel, int raysPerFrame, int aoSamples, float aoRayLength)
 	: m_imgWidth(width)
 	, m_imgHeight(height)
 	, m_pixelCount(m_imgWidth* m_imgHeight)
@@ -23,6 +23,7 @@ Raytracer::Raytracer(int width, int height, int subSamples, int samplesPerPixel,
 	, m_rayCount(0)
 	, m_aoSamples(aoSamples)
 	, m_invAoSamples(1.0f / aoSamples)
+	, m_aoRayLength(aoRayLength)
 {
 	m_cols.resize(m_pixelCount, Vec3(0, 0, 0));
 	m_sampleAccumulation.resize(m_pixelCount, 0);
@@ -204,20 +205,27 @@ Vec3 Raytracer::TraceAO(const Ray& r)
 #endif
 
 	float accum = 0.0f;
-	for (int i = 0; i < m_aoSamples; i++)
+	for (int i = 0; i < m_aoSamples; ++i)
 	{
 		Vec3 rHemisphereVec = RandomInUnitHemisphere(n);
 
-		double sect = 0;
+		double intersectTime = 0;
 		int secId = 0;
 		Ray secondRay(x, rHemisphereVec);
-		if (scene.Intersect(secondRay, sect, secId) && sect <= 10.0f)
+		if (scene.Intersect(secondRay, intersectTime, secId) && intersectTime <= m_aoRayLength)
 		{
-			accum++;
+#if USE_OPTIMIZED_VEC 
+			float nDotL = dot_product(n, rHemisphereVec);
+#else
+			float nDotL = rHemisphereVec.dot(n);
+#endif
+			accum += nDotL;
 		}
 	}
-	float colValue = accum * accum * m_invAoSamples;
-	return Vec3(1.0f, 1.0f, 1.0f) - Vec3(colValue, colValue, colValue);
+
+	float col = accum * m_invAoSamples;
+
+	return Vec3(1.0f, 1.0f, 1.0f) - Vec3(col, col, col);
 }
 
 Vec3 Raytracer::TraceShadowRay(const Ray& r)

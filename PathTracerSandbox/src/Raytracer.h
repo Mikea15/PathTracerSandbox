@@ -30,7 +30,7 @@ public:
 	};
 
 	Raytracer() = default;
-	Raytracer(int width, int height, int subSamples, int samplesPerPixel, int raysPerFrame, int aoSamples);
+	Raytracer(int width, int height, int subSamples, int samplesPerPixel, int raysPerFrame, int aoSamples, float aoRayLength);
 	~Raytracer();
 
 	void SetSettings(Settings settings) { m_settings = settings; }
@@ -74,6 +74,7 @@ private:
 
 	int m_aoSamples;
 	float m_invAoSamples;
+	float m_aoRayLength;
 
 	int m_raysPerFrame;
 
