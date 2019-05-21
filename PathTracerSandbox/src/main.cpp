@@ -28,12 +28,8 @@ static const unsigned int SCREEN_WIDTH = 800u;
 static const unsigned int SCREEN_HEIGHT = 600u;
 static const unsigned int PIXEL_COUNT = SCREEN_WIDTH * SCREEN_HEIGHT;
 
-Vec3* g_colorData = NULL;
-unsigned char* g_rgbaData = NULL;
-
 Vec3 camPos(50, 45, 290.6);
-
-Raytracer tracer(SCREEN_WIDTH, SCREEN_HEIGHT, 2, 8*1024, 6);
+Raytracer tracer(SCREEN_WIDTH, SCREEN_HEIGHT, 2, 6, 8 * 1024, 32);
 
 // main entry point
 int main(int argc, char* argv[])
@@ -53,10 +49,6 @@ int main(int argc, char* argv[])
 	SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	glewInit();
-
-	// initialize image data
-	g_colorData = new Vec3 [PIXEL_COUNT]();
-	g_rgbaData = new unsigned char [PIXEL_COUNT * 4u]();
 
 	float timeMs = 0.0f;
 	float raysPerSecMax = 0.0f;
@@ -78,6 +70,36 @@ int main(int argc, char* argv[])
 			{
 			case SDL_KEYDOWN:
 				break;
+			case SDL_KEYUP:
+				switch (event.key.keysym.sym)
+				{
+				case SDLK_F1:
+					// TODO:
+					// SaveToFile(SCREEN_WIDTH, SCREEN_HEIGHT, rgbaData, PIXEL_COUNT * 4);
+					break;
+				case SDLK_F2:
+					tracer.SetRenderType(RenderType::Diffuse);
+					break;
+				case SDLK_F3:
+					tracer.SetRenderType(RenderType::AmbientOcclusion);
+					break;
+				case SDLK_F4:
+					tracer.SetRenderType(RenderType::ShadowRays);
+					break;
+				case SDLK_F5:
+					tracer.SetRenderMode(RenderMode::SubPixelSamplingAccumulation);
+					break;
+				case SDLK_F6:
+					tracer.SetRenderMode(RenderMode::SubPixelSampling);
+					break;
+				case SDLK_F7:
+					tracer.SetRenderMode(RenderMode::MultiSampling);
+					break;
+				case SDLK_c:
+					tracer.Clear();
+					break;
+				}
+				break;
 			case SDL_QUIT:
 				isDone = true;
 				break;
@@ -97,8 +119,7 @@ int main(int argc, char* argv[])
 
 		auto frameStartTime = std::chrono::high_resolution_clock::now();
 
-		const unsigned int RAY_COUNT = 8192u;
-		tracer.Trace(cameraRay, RAY_COUNT, SCREEN_WIDTH, SCREEN_HEIGHT, g_colorData, g_rgbaData);
+		tracer.Trace(cameraRay);
 
 		auto timeSpan = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - frameStartTime);
 
@@ -130,7 +151,7 @@ int main(int argc, char* argv[])
 		// begin render.
 		// SDL_GL_MakeCurrent(window, gl_context);
 
-		SDL_UpdateTexture(texture, NULL, g_rgbaData, SCREEN_WIDTH * 4);
+		SDL_UpdateTexture(texture, NULL, tracer.GetRGBData().data(), SCREEN_WIDTH * 4);
 		SDL_RenderCopy(renderer, texture, NULL, NULL);
 		
 		SDL_RenderPresent(renderer);
@@ -138,10 +159,6 @@ int main(int argc, char* argv[])
 		// end render.
 		// SDL_GL_SwapWindow(window);
 	}
-
-	// clean up
-	delete[] g_rgbaData;
-	delete[] g_colorData;
 
 	// clean up SDL
 	// SDL_GL_DeleteContext(gl_context);

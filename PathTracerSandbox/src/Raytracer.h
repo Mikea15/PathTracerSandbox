@@ -30,15 +30,13 @@ public:
 	};
 
 	Raytracer() = default;
-	Raytracer(int width, int height, int subSamples, int samplesPerPixel, int raysPerFrame);
+	Raytracer(int width, int height, int subSamples, int samplesPerPixel, int raysPerFrame, int aoSamples);
 	~Raytracer();
 
 	void SetSettings(Settings settings) { m_settings = settings; }
 
-	void Trace(const Ray& cameraRay, unsigned int rayCount, unsigned int width, unsigned int height, Vec3* colorData, unsigned char* rgbaData);
+	void Trace(const Ray& cameraRay);
 	void Clear();
-
-	void GetImage(unsigned char* rgbData) const;
 
 	float GetAvgSamplesPerPixel() const;
 	unsigned int GetRayCount() const { return m_rayCount; }
@@ -47,14 +45,20 @@ public:
 
 	void ToggleLightSampling();
 
+	const std::vector<Vec3>& GetColorData() const { return m_colorData; }
+	const std::vector<unsigned char>& GetRGBData() const { return m_rgbData; }
+
 private:
-	void TraceSampleAccumulation(const Ray& cameraRay, unsigned int rayCount, unsigned int width, unsigned int height, Vec3* colorData, unsigned char* rgbaData);
+	void TraceSampleAccumulation(const Ray& cameraRay);
 
 	Vec3 TraceRay(const Ray& r, int depth, int E = 1);
 	Vec3 TraceShadowRay(const Ray& r);
 	Vec3 TraceAO(const Ray& r);
 	
 private:
+	std::vector<Vec3> m_colorData;
+	std::vector<unsigned char> m_rgbData;
+
 	int m_imgWidth;
 	int m_imgHeight;
 	unsigned int m_pixelCount;
@@ -67,6 +71,9 @@ private:
 
 	int m_samplesPerPixel;
 	float m_invSamplesPerPixel;
+
+	int m_aoSamples;
+	float m_invAoSamples;
 
 	int m_raysPerFrame;
 

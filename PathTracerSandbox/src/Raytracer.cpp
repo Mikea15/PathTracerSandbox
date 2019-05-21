@@ -6,7 +6,7 @@
 #include "Scene.h"
 #include "Sphere.h"
 
-Raytracer::Raytracer(int width, int height, int subSamples, int samplesPerPixel, int raysPerFrame)
+Raytracer::Raytracer(int width, int height, int subSamples, int samplesPerPixel, int raysPerFrame, int aoSamples)
 	: m_imgWidth(width)
 	, m_imgHeight(height)
 	, m_pixelCount(m_imgWidth* m_imgHeight)
@@ -21,22 +21,27 @@ Raytracer::Raytracer(int width, int height, int subSamples, int samplesPerPixel,
 	, m_renderType(RenderType::Diffuse)
 	, m_enableLightSampling(false)
 	, m_rayCount(0)
+	, m_aoSamples(aoSamples)
+	, m_invAoSamples(1.0f / aoSamples)
 {
 	m_cols.resize(m_pixelCount, Vec3(0, 0, 0));
 	m_sampleAccumulation.resize(m_pixelCount, 0);
+
+	m_colorData.resize(m_pixelCount, Vec3());
+	m_rgbData.resize(m_pixelCount * 4u, 0);
 }
 
 Raytracer::~Raytracer()
 {
 }
 
-void Raytracer::Trace(const Ray& cameraRay, unsigned int rayCount, unsigned int width, unsigned int height, Vec3* colorData, unsigned char* rgbaData)
+void Raytracer::Trace(const Ray& cameraRay)
 {
 	m_rayCount = 0;
 	switch (m_renderMode)
 	{
 	case RenderMode::SubPixelSamplingAccumulation:
-		TraceSampleAccumulation(cameraRay, rayCount, width, height, colorData, rgbaData);
+		TraceSampleAccumulation(cameraRay);
 		break;
 	case RenderMode::MultiSampling:
 		// TraceMultiSampling(world, lights, cam);
@@ -53,43 +58,13 @@ void Raytracer::Clear()
 {
 	for (unsigned int p = 0; p < m_pixelCount; ++p)
 	{
+		m_rgbData[p * 4u + 2u] = 0;
+		m_rgbData[p * 4u + 1u] = 0;
+		m_rgbData[p * 4u + 0u] = 0;
+
+		m_colorData[p] = Vec3(0, 0, 0);
 		m_cols[p] = Vec3(0, 0, 0);
 		m_sampleAccumulation[p] = 0;
-	}
-}
-
-void Raytracer::GetImage(unsigned char* rgbData) const
-{
-	if (m_renderMode == RenderMode::SubPixelSamplingAccumulation)
-	{
-		for (unsigned int p = 0; p < m_pixelCount; ++p)
-		{
-			const float invSamplePerPixel = 1.0f / static_cast<float>(m_sampleAccumulation[p]);
-#if USE_OPTIMIZED_VEC 
-			rgbData[p * 4u + 2u] = MathUtils::Linear2sRGB(m_cols[p].get_x() * invSamplePerPixel, 2.2f);
-			rgbData[p * 4u + 1u] = MathUtils::Linear2sRGB(m_cols[p].get_y() * invSamplePerPixel, 2.2f);
-			rgbData[p * 4u + 0u] = MathUtils::Linear2sRGB(m_cols[p].get_z() * invSamplePerPixel, 2.2f);
-#else
-			rgbData[p * 4u + 2u] = MathUtils::Linear2sRGB(m_cols[p].x * invSamplePerPixel, 2.2f);
-			rgbData[p * 4u + 1u] = MathUtils::Linear2sRGB(m_cols[p].y * invSamplePerPixel, 2.2f);
-			rgbData[p * 4u + 0u] = MathUtils::Linear2sRGB(m_cols[p].z * invSamplePerPixel, 2.2f);
-#endif
-		}
-	}
-	else
-	{
-		for (unsigned int p = 0; p < m_pixelCount; ++p)
-		{
-#if USE_OPTIMIZED_VEC 
-			rgbData[p * 4u + 2u] = MathUtils::Linear2sRGB(m_cols[p].get_x(), 2.2f);
-			rgbData[p * 4u + 1u] = MathUtils::Linear2sRGB(m_cols[p].get_y(), 2.2f);
-			rgbData[p * 4u + 0u] = MathUtils::Linear2sRGB(m_cols[p].get_z(), 2.2f);
-#else
-			rgbData[p * 4u + 2u] = MathUtils::Linear2sRGB(m_cols[p].x, 2.2f);
-			rgbData[p * 4u + 1u] = MathUtils::Linear2sRGB(m_cols[p].y, 2.2f);
-			rgbData[p * 4u + 0u] = MathUtils::Linear2sRGB(m_cols[p].z, 2.2f);
-#endif
-		}
 	}
 }
 
@@ -127,12 +102,13 @@ void Raytracer::ToggleLightSampling()
 	m_enableLightSampling = !m_enableLightSampling;
 }
 
-void Raytracer::TraceSampleAccumulation(const Ray& cameraRay, unsigned int rayCount, unsigned int width, unsigned int height, Vec3* colorData, unsigned char* rgbaData)
+
+void Raytracer::TraceSampleAccumulation(const Ray& cameraRay)
 {
 	m_rayCount = 0;
 	// camera x/y
 	const float fov = 0.5135f;
-	const Vec3 cx = Vec3(width * fov / height, 0, 0);
+	const Vec3 cx = Vec3(m_imgWidth * fov / m_imgHeight, 0, 0);
 #if USE_OPTIMIZED_VEC 
 	const Vec3 cy = normalize_vector(cross_product(cx, cameraRay.direction)) * fov;
 #else
@@ -140,12 +116,12 @@ void Raytracer::TraceSampleAccumulation(const Ray& cameraRay, unsigned int rayCo
 #endif
 
 #pragma omp parallel for schedule(dynamic, 1) 
-	for (int rays = 0; rays < rayCount; ++rays)
+	for (int rays = 0; rays < m_raysPerFrame; ++rays)
 	{
-		const unsigned int x = random::XorShift(0u, width);
-		const unsigned int y = random::XorShift(0u, height);
+		const unsigned int x = random::XorShift(0, m_imgWidth);
+		const unsigned int y = random::XorShift(0, m_imgHeight);
 
-		const unsigned int index = (height - y - 1) * width + x;
+		const unsigned int index = (m_imgHeight - y - 1) * m_imgWidth + x;
 		++m_sampleAccumulation[index];
 
 		for (unsigned int sy = 0; sy < 2u; sy++)
@@ -163,41 +139,46 @@ void Raytracer::TraceSampleAccumulation(const Ray& cameraRay, unsigned int rayCo
 					: 1 - sqrt(2 - r2);
 
 				Vec3 d =
-					cx * (((sx + 0.5 + dx) * 0.5 + x) / width - 0.5) +
-					cy * (((sy + 0.5 + dy) * 0.5 + y) / height - 0.5) +
+					cx * (((sx + 0.5 + dx) * 0.5 + x) / m_imgWidth - 0.5) +
+					cy * (((sy + 0.5 + dy) * 0.5 + y) / m_imgHeight - 0.5) +
 					cameraRay.direction;
 
-				// const Vec r = TraceAO(Ray(cameraRay.origin + d * 130, d.normalize()));
-				// const Vec r = TraceShadowRay(Ray(cameraRay.origin + d * 130, d.normalize()));
-				
 #if USE_OPTIMIZED_VEC 
-				// const Vec3 r = TraceAO(Ray(cameraRay.origin + d * 130,  normalize_vector(d)));
-				// const Vec3 r = TraceShadowRay(Ray(cameraRay.origin + d * 130, normalize_vector(d)));
-				const Vec3 r = TraceRay(Ray(cameraRay.origin + d * 130, normalize_vector(d)), 0);
-				colorData[index] = colorData[index] + Vec3(MathUtils::Clamp(r.get_x()) * 0.25, MathUtils::Clamp(r.get_y()) * 0.25, MathUtils::Clamp(r.get_z()) * 0.25);
+				Ray ray = Ray(cameraRay.origin + d * 130, normalize_vector(d));
 #else
-				// const Vec3 r = TraceAO(Ray(cameraRay.origin + d * 130, d.normalize()));
-				// const Vec3 r = TraceShadowRay(Ray(cameraRay.origin + d * 130, d.normalize()));
-				const Vec3 r = TraceRay(Ray(cameraRay.origin + d * 130, d.normalize()), 0);
-				colorData[index] = colorData[index] + Vec3(MathUtils::Clamp(r.x) * 0.25, MathUtils::Clamp(r.y) * 0.25, MathUtils::Clamp(r.z) * 0.25);
+				Ray ray = Ray(cameraRay.origin + d * 130, d.normalize());
+#endif
+				Vec3 r;
+				switch (m_renderType)
+				{
+				case RenderType::AmbientOcclusion: r = TraceAO(ray); break;
+				case RenderType::ShadowRays: r = TraceShadowRay(ray); break;
+				case RenderType::Diffuse:
+				default: r = TraceRay(ray, 0); break;
+				}
+
+#if USE_OPTIMIZED_VEC 
+				m_colorData[index] = m_colorData[index] + Vec3(MathUtils::Clamp(r.get_x()) * 0.25, MathUtils::Clamp(r.get_y()) * 0.25, MathUtils::Clamp(r.get_z()) * 0.25);
+#else
+				m_colorData[index] = m_colorData[index] + Vec3(MathUtils::Clamp(r.x) * 0.25, MathUtils::Clamp(r.y) * 0.25, MathUtils::Clamp(r.z) * 0.25);
 #endif
 			}
 		}
 
 		const float oneBySampleCount = 1.0f / m_sampleAccumulation[index];
+
+		// convert BGR to RGB
 #if USE_OPTIMIZED_VEC 
-		// convert BGR to RGB
-		rgbaData[index * 4u + 2u] = MathUtils::Gamma(colorData[index].get_x() * oneBySampleCount);
-		rgbaData[index * 4u + 1u] = MathUtils::Gamma(colorData[index].get_y() * oneBySampleCount);
-		rgbaData[index * 4u + 0u] = MathUtils::Gamma(colorData[index].get_z() * oneBySampleCount);
+		m_rgbData[index * 4u + 2u] = MathUtils::Gamma(m_colorData[index].get_x() * oneBySampleCount);
+		m_rgbData[index * 4u + 1u] = MathUtils::Gamma(m_colorData[index].get_y() * oneBySampleCount);
+		m_rgbData[index * 4u + 0u] = MathUtils::Gamma(m_colorData[index].get_z() * oneBySampleCount);
 #else
-		// convert BGR to RGB
-		rgbaData[index * 4u + 2u] = MathUtils::Gamma(colorData[index].x * oneBySampleCount);
-		rgbaData[index * 4u + 1u] = MathUtils::Gamma(colorData[index].y * oneBySampleCount);
-		rgbaData[index * 4u + 0u] = MathUtils::Gamma(colorData[index].z * oneBySampleCount);
+		m_rgbData[index * 4u + 2u] = MathUtils::Gamma(m_colorData[index].x * oneBySampleCount);
+		m_rgbData[index * 4u + 1u] = MathUtils::Gamma(m_colorData[index].y * oneBySampleCount);
+		m_rgbData[index * 4u + 0u] = MathUtils::Gamma(m_colorData[index].z * oneBySampleCount);
 #endif
+		}
 	}
-}
 
 
 Vec3 Raytracer::TraceAO(const Ray& r)
@@ -222,9 +203,8 @@ Vec3 Raytracer::TraceAO(const Ray& r)
 	const Vec3 nl = n.dot(r.direction) < 0 ? n : n * -1;
 #endif
 
-	const int samples = 4;
 	float accum = 0.0f;
-	for (int i = 0; i < samples; i++)
+	for (int i = 0; i < m_aoSamples; i++)
 	{
 		Vec3 rHemisphereVec = RandomInUnitHemisphere(n);
 
@@ -236,7 +216,7 @@ Vec3 Raytracer::TraceAO(const Ray& r)
 			accum++;
 		}
 	}
-	float colValue = accum * accum / samples;
+	float colValue = accum * accum * m_invAoSamples;
 	return Vec3(1.0f, 1.0f, 1.0f) - Vec3(colValue, colValue, colValue);
 }
 
@@ -247,7 +227,7 @@ Vec3 Raytracer::TraceShadowRay(const Ray& r)
 	if (!scene.Intersect(r, t, id))
 	{
 		// if miss, return black
-		return Vec3(0,0,0);
+		return Vec3(0, 0, 0);
 	}
 
 	// the hit object
@@ -273,7 +253,7 @@ Vec3 Raytracer::TraceShadowRay(const Ray& r)
 
 		Vec3 w = nl;
 #if USE_OPTIMIZED_VEC 
-		Vec3 u = normalize_vector( cross_product(fabs(w.get_x()) > .1 ? Vec3(0, 1, 0) : Vec3(1, 0, 0), w));
+		Vec3 u = normalize_vector(cross_product(fabs(w.get_x()) > .1 ? Vec3(0, 1, 0) : Vec3(1, 0, 0), w));
 		Vec3 v = cross_product(w, u);
 		Vec3 d = normalize_vector(u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1 - r2));
 #else
@@ -304,7 +284,7 @@ Vec3 Raytracer::TraceShadowRay(const Ray& r)
 			Vec3 sv = sw.cross(su);
 			double cos_a_max = sqrt(1 - s.radius * s.radius / (x - s.GetPosition()).dot(x - s.GetPosition()));
 #endif
-			
+
 			double eps1 = random::XorShift(0.0f, 1.0f), eps2 = random::XorShift(0.0f, 1.0f);
 			double cos_a = 1 - eps1 + eps1 * cos_a_max;
 			double sin_a = sqrt(1 - cos_a * cos_a);
@@ -329,11 +309,11 @@ Vec3 Raytracer::TraceShadowRay(const Ray& r)
 			{
 				e = Vec3(0, 0, 0);
 			}
-		}
+			}
 
 		return e;
+		}
 	}
-}
 
 Vec3 Raytracer::TraceRay(const Ray& r, int depth, int E)
 {
@@ -367,7 +347,7 @@ Vec3 Raytracer::TraceRay(const Ray& r, int depth, int E)
 #else
 	const double p = f.x > f.y && f.x > f.z ? f.x : f.y > f.z ? f.y : f.z;
 #endif
-	
+
 	if (++depth > 5 || !p)
 	{
 		if (random::XorShift(0.0f, 1.0f) < p)
@@ -380,10 +360,6 @@ Vec3 Raytracer::TraceRay(const Ray& r, int depth, int E)
 		}
 	}
 
-	// Live++: try changing the max. iteration depth
-	// (=0  : only lights)
-	// (=1  : only diffuse, no color bleeding)
-	// (>=2 : multi-bounce GI, reflections, ...)
 	if (depth > 5)
 	{
 		return obj.GetEmission() * E;
@@ -495,7 +471,7 @@ Vec3 Raytracer::TraceRay(const Ray& r, int depth, int E)
 		return obj.GetEmission() + f.mult(TraceRay(reflRay, depth));
 	}
 #endif
-	
+
 #if USE_OPTIMIZED_VEC 
 	Vec3 tdir = normalize_vector(r.direction * nnt - n * ((into ? 1 : -1) * (ddn * nnt + sqrt(cos2t))));
 	double a = nt - nc, b = nt + nc, R0 = a * a / (b * b), c = 1 - (into ? -ddn : dot_product(tdir, n));
@@ -511,11 +487,11 @@ Vec3 Raytracer::TraceRay(const Ray& r, int depth, int E)
 		TraceRay(reflRay, depth) * RP
 		: TraceRay(Ray(x, tdir), depth) * TP)
 		: TraceRay(reflRay, depth) * Re + TraceRay(Ray(x, tdir), depth) * Tr);
-	
+
 #else
 	return obj.GetEmission() + f.mult(depth > 2 ? (random::XorShift(0.0f, 1.0f) < P ?
 		TraceRay(reflRay, depth) * RP
 		: TraceRay(Ray(x, tdir), depth) * TP)
 		: TraceRay(reflRay, depth) * Re + TraceRay(Ray(x, tdir), depth) * Tr);
 #endif
-}
+	}
