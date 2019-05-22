@@ -173,6 +173,7 @@
     <ClCompile Include="src\Scene.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\BVH.h" />
     <ClInclude Include="src\imgui\imconfig.h" />
     <ClInclude Include="src\imgui\imgui.h" />
     <ClInclude Include="src\imgui\imgui_impl_opengl3.h" />

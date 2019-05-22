@@ -103,7 +103,7 @@ void Raytracer::ToggleLightSampling()
 	m_enableLightSampling = !m_enableLightSampling;
 }
 
-
+#pragma optimize("", off)
 void Raytracer::TraceSampleAccumulation(const Ray& cameraRay)
 {
 	m_rayCount = 0;
@@ -170,13 +170,13 @@ void Raytracer::TraceSampleAccumulation(const Ray& cameraRay)
 
 		// convert BGR to RGB
 #if USE_OPTIMIZED_VEC 
-		m_rgbData[index * 4u + 2u] = MathUtils::Gamma(m_colorData[index].get_x() * oneBySampleCount);
-		m_rgbData[index * 4u + 1u] = MathUtils::Gamma(m_colorData[index].get_y() * oneBySampleCount);
-		m_rgbData[index * 4u + 0u] = MathUtils::Gamma(m_colorData[index].get_z() * oneBySampleCount);
+		m_rgbData[index * 4u + 2u] = MathUtils::Linear2sRGB(m_colorData[index].get_x() * oneBySampleCount, 2.2f);
+		m_rgbData[index * 4u + 1u] = MathUtils::Linear2sRGB(m_colorData[index].get_y() * oneBySampleCount, 2.2f);
+		m_rgbData[index * 4u + 0u] = MathUtils::Linear2sRGB(m_colorData[index].get_z() * oneBySampleCount, 2.2f);
 #else
-		m_rgbData[index * 4u + 2u] = MathUtils::Gamma(m_colorData[index].x * oneBySampleCount);
-		m_rgbData[index * 4u + 1u] = MathUtils::Gamma(m_colorData[index].y * oneBySampleCount);
-		m_rgbData[index * 4u + 0u] = MathUtils::Gamma(m_colorData[index].z * oneBySampleCount);
+		m_rgbData[index * 4u + 2u] = MathUtils::Linear2sRGB(m_colorData[index].x * oneBySampleCount, 2.2f);
+		m_rgbData[index * 4u + 1u] = MathUtils::Linear2sRGB(m_colorData[index].y * oneBySampleCount, 2.2f);
+		m_rgbData[index * 4u + 0u] = MathUtils::Linear2sRGB(m_colorData[index].z * oneBySampleCount, 2.2f);
 #endif
 		}
 	}

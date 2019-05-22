@@ -95,14 +95,14 @@ struct Vec3
 static Vec3 RandomInUnitSphere()
 {
 	Vec3 p(0, 0, 0);
+
+	do {
+		p = Vec3(random::XorShift(0.0f, 1.0f), random::XorShift(0.0f, 1.0f), random::XorShift(0.0f, 1.0f)) * 2.0f - Vec3(1, 1, 1);
+	}
 #if USE_OPTIMIZED_VEC 
-	do {
-		p = Vec3(random::XorShift(0.0f, 1.0f), random::XorShift(0.0f, 1.0f), random::XorShift(0.0f, 1.0f)) * 2.0f - Vec3(1, 1, 1);
-	} while (vector_length(p) >= 1.0f);
+	while (vector_length(p) >= 1.0f);
 #else
-	do {
-		p = Vec3(random::XorShift(0.0f, 1.0f), random::XorShift(0.0f, 1.0f), random::XorShift(0.0f, 1.0f)) * 2.0f - Vec3(1, 1, 1);
-	} while (p.lengthSq() >= 1.0f);
+	while (p.lengthSq() >= 1.0f);
 #endif
 	return p;
 }
@@ -112,10 +112,12 @@ static Vec3 RandomInUnitHemisphere(const Vec3& n)
 	Vec3 p = RandomInUnitSphere();
 #if USE_OPTIMIZED_VEC 
 	if ( dot_product(p, n) <= 0.0)
-		p = p - p;
 #else
 	if (p.dot(n) <= 0.0)
-		p = p - p;
 #endif
+	{
+		p = p - p;
+	}
+
 	return p;
 }

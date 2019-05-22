@@ -1,7 +1,6 @@
 
 #pragma once
 
-#include "Vec3.h"
 #include "Ray.h"
 
 struct Sphere
@@ -34,7 +33,7 @@ struct Sphere
 		// Solve t^2*d.d + 2*t*(o-p).d + (o-p).(o-p)-R^2 = 0
 		const Vec3 op = GetPosition() - r.origin;
 
-		const double eps = 0.00001;
+		const double eps = 1e-5;
 #if USE_OPTIMIZED_VEC 
 		const double b = dot_product(op, r.direction);
 		const double det = b * b - dot_product(op, op) + radius * radius;
