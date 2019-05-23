@@ -116,7 +116,7 @@ void Raytracer::TraceSampleAccumulation(const Ray& cameraRay)
 	const Vec3 cy = (cx.cross(cameraRay.direction)).normalize() * fov;
 #endif
 
-#pragma omp parallel for schedule(dynamic, 1) 
+// #pragma omp parallel for schedule(dynamic, 1) 
 	for (int rays = 0; rays < m_raysPerFrame; ++rays)
 	{
 		const unsigned int x = random::XorShift(0, m_imgWidth);

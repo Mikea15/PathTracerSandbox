@@ -65,17 +65,22 @@ public:
 		leafs.push_back(node);
 	}
 
-	bool Intersect(const Ray& r, double& t, int& id) 
+	bool Intersect(const std::vector<Sphere>& world, const Ray& r, double& t, int& id) 
 	{
 		double inf = t = 1e20;
-
-		int closestId = 0;
-		const unsigned int size = leafs.size();
+		int bvhId = id;
+		
 		for (const BVHNode& n : leafs)
 		{
-			if (!n.boundingBox.Intersect(r, 1e-5, 1e10))
+			if (n.boundingBox.Intersect(r, 1e-5, 1e10))
 			{
-				continue;
+				bvhId = n.sphereIndex;
+				double d = world[bvhId].intersect(r);
+				if (d && d < t)
+				{
+					t = d;
+					id = bvhId;
+				}
 			}
 		}
 

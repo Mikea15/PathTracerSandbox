@@ -12,25 +12,39 @@ Scene::Scene()
 	g_spheres.push_back(Sphere({ 16.5,	{ 27, 16.5, 47 },			{ 0, 0, 0 },		{ 0.999, 0.999, 0.999 },	ReflectionType::SPECULAR,	false }));	// Mirror
 	g_spheres.push_back(Sphere({ 16.5,	{ 73, 16.5, 78 },			{ 0, 0, 0 },		{ 0.999, 0.999, 0.999 },	ReflectionType::REFRACTIVE,	false }));	// Glass
 	g_spheres.push_back(Sphere({ 1.5,	{ 50, 81.6 - 16.5, 81.6 },	{ 400, 400, 400 },	{ 0, 0, 0 },				ReflectionType::DIFFUSE,	true }));	// Light
-	g_spheres.push_back(Sphere({ 15.0,	{ 40, 10.0, 61.6 },			{ 0, 0, 0 },		{ 0.999, 0.999, 0.999 },	ReflectionType::DIFFUSE,	false }));	// Origin
-	g_spheres.push_back(Sphere({ 15.0,	{ 50, 30.0, 81.6 },			{ 0, 0, 0 },		{ 0.999, 0.999, 0.999 },	ReflectionType::REFRACTIVE,	false }));	// Origin
-	g_spheres.push_back(Sphere({ 15.0,	{ 60, 50.0, 71.6 },			{ 0, 0, 0 },		{ 0.999, 0.999, 0.999 },	ReflectionType::DIFFUSE,	false }));	// Origin
+	// g_spheres.push_back(Sphere({ 15.0,	{ 40, 10.0, 61.6 },			{ 0, 0, 0 },		{ 0.299, 0.999, 0.999 },	ReflectionType::DIFFUSE,	false }));
+	// g_spheres.push_back(Sphere({ 15.0,	{ 50, 30.0, 81.6 },			{ 0, 0, 0 },		{ 0.999, 0.199, 0.999 },	ReflectionType::REFRACTIVE,	false }));
+	// g_spheres.push_back(Sphere({ 15.0,	{ 60, 50.0, 71.6 },			{ 0, 0, 0 },		{ 0.299, 0.499, 0.999 },	ReflectionType::DIFFUSE,	false }));
+
+	for (unsigned int i = 0; i < 30; ++i)
+	{
+		float x = (random::XorShift(0.0f, 1.0f) * 2.0f - 1.0f) * 20.0f;
+		float y = (random::XorShift(0.0f, 1.0f) * 2.0f - 1.0f) * 20.0f;
+		float z = (random::XorShift(0.0f, 1.0f) * 2.0f - 1.0f) * 20.0f;
+		ReflectionType::Enum type = static_cast<ReflectionType::Enum>(random::XorShift(0, 3));
+
+		g_spheres.push_back(
+			Sphere({ 6.0, { 50 + x, 50 + y, 50 + z }, { 0, 0, 0 }, 
+				{ 0.999, 0.999, 0.999 }, type, false }));
+	}
 
 	const unsigned int sceneSize = g_spheres.size();
 	for (unsigned int i = 0u; i < sceneSize; ++i)
 	{
 		m_bvh.Add(g_spheres[i], i);
 	}
+	
 }
 
 bool Scene::Intersect(const Ray& r, double& t, int& id)
 {
+	double inf = t = 1e20;
+
 	// Experiment BVH.
 	// First iteration, only with leaves.
 	// Second. I'll implement a proper BVH
 	// return IntersectBVH(r, t, id);
-
-	double inf = t = 1e20;
+	
 	const unsigned int sceneSize = g_spheres.size();
 	for (unsigned int i = 0u; i < sceneSize; ++i)
 	{
@@ -47,14 +61,6 @@ bool Scene::Intersect(const Ray& r, double& t, int& id)
 
 bool Scene::IntersectBVH(const Ray & r, double & t, int & id)
 {
-	double inf = t = 1e20;
-	const unsigned int sceneSize = g_spheres.size();
-
-	if (m_bvh.Intersect(r, t, id))
-	{
-		t = g_spheres[id].intersect(r);
-	}
-
-	return t < inf;
+	return m_bvh.Intersect(g_spheres, r, t, id);
 }
 
